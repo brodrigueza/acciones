@@ -76,6 +76,7 @@ def simular_posicion_drip(row, dividendos_dict, precios_hist_dict):
 
 st.title("📊 Portafolio Consolidado (DRIP & Multimoneda)")
 st.markdown("Las acciones internacionales reinvierten dividendos automáticamente. Las nacionales generan liquidez (Caja).")
+st.link_button("Descargar Template)", "https://github.com/brodrigueza/acciones/raw/refs/heads/main/portafolio%20Template.xlsx")
 
 archivo_excel = st.file_uploader("Cargar transacciones (Excel)", type=["xlsx", "xls"], accept_multiple_files=True)
 
