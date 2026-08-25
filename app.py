@@ -118,8 +118,8 @@ if archivo_excel:
             }).rename(columns={"Fecha_Compra_Temp": "Fecha_Compra"})
             
         df_transacciones["Fecha_Compra"] = pd.to_datetime(df_transacciones["Fecha_Compra"], utc=True)
-        tickers_unicos = df_transacciones["Ticker"].unique()
-        
+        tickers_unicos = tuple(df_transacciones["Ticker"].unique())
+                                    
         tipo_cambio_actual = obtener_tipo_cambio()
         st.info(f"Dólar actual: ${tipo_cambio_actual:,.2f} CLP | Calculando reinversiones históricas...")
         
