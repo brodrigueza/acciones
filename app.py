@@ -164,42 +164,48 @@ if archivo_excel:
         df_portafolio["Ganancia_Total_CLP"] = df_portafolio["Ganancia_Capital_CLP"] + df_portafolio["Dividendos_Cash_CLP"]
         df_portafolio["Rentabilidad_Total_%"] = (df_portafolio["Ganancia_Total_CLP"] / df_portafolio["Costo_Total_CLP"]) * 100
 
-        # --- SECCIÓN 1: MÉTRICAS GLOBALES (Resaltando la Ganancia) ---
+        # --- SECCIÓN 1: MÉTRICAS GLOBALES (Resaltando el Flujo Real) ---
         col1, col2, col3, col4 = st.columns(4)
-        costo_global = df_portafolio["Costo_Total_CLP"].sum()
-        valor_invertido_global = df_portafolio["Valor_Posicion_CLP"].sum()
-        caja_dividendos_nacionales = df_portafolio["Dividendos_Cash_CLP"].sum()
-
-        costo_global_div = costo_global - caja_dividendos_nacionales
-        patrimonio_total = valor_invertido_global
-        ganancia_neta_global = patrimonio_total - costo_global_div
         
-        # CORRECCIÓN: Fórmula correcta de rentabilidad base
-        if costo_global_div > 0:
-            rentabilidad_porcentaje = (ganancia_neta_global / costo_global_div) * 100
+        costo_historico_total = df_portafolio["Costo_Total_CLP"].sum()
+        valor_mercado_total = df_portafolio["Valor_Posicion_CLP"].sum()
+        dividendos_historicos_nacionales = df_portafolio["Dividendos_Cash_CLP"].sum()
+
+        # EL CONCEPTO CLAVE: Tu capital real aportado (Out-of-pocket)
+        # Es todo lo que has comprado, menos el dinero que se financió solo (dividendos)
+        capital_de_bolsillo = costo_historico_total - dividendos_historicos_nacionales
+        
+        # El patrimonio es exclusivamente el valor actual de tus acciones.
+        # (El efectivo ya te lo gastaste comprando más acciones, no está líquido).
+        patrimonio_total = valor_mercado_total
+        
+        # Tu ganancia neta compara lo que tienes hoy vs lo que realmente salió de tu banco
+        ganancia_neta_global = patrimonio_total - capital_de_bolsillo
+        
+        if capital_de_bolsillo > 0:
+            rentabilidad_porcentaje = (ganancia_neta_global / capital_de_bolsillo) * 100
         else:
             rentabilidad_porcentaje = 0.0
 
-        col1.metric("Capital Aportado", f"${costo_global_div:,.0f}")
-        col2.metric("Valor Mercado (Acciones)", f"${patrimonio_total:,.0f}")
-        col3.metric("Dividendos Generados (Caja)", f"${caja_dividendos_nacionales:,.0f}")
+        col1.metric("Capital Aportado (De tu bolsillo)", f"${capital_de_bolsillo:,.0f}")
+        col2.metric("Patrimonio en Acciones", f"${patrimonio_total:,.0f}")
+        col3.metric("Dividendos Históricos Cobrados", f"${dividendos_historicos_nacionales:,.0f}")
         col4.metric("Ganancia Neta Total", f"${ganancia_neta_global:,.0f}", f"{rentabilidad_porcentaje:.2f}%")
 
         st.divider()
 
-        # --- SECCIÓN 2: GRÁFICOS ---
+        # --- SECCIÓN 2: GRÁFICOS (Sin duplicar la caja) ---
         st.subheader("Distribución Patrimonial")
         col_torta1, col_torta2 = st.columns(2)
         
         df_grafico = df_portafolio[['Ticker', 'Valor_Posicion_CLP']].copy()
         df_grafico = df_grafico.rename(columns={'Valor_Posicion_CLP': 'Valor'})
         
-        if caja_dividendos_nacionales > 0:
-            fila_caja = pd.DataFrame({'Ticker': ['CAJA (Efectivo)'], 'Valor': [caja_dividendos_nacionales]})
-            df_grafico = pd.concat([df_grafico, fila_caja], ignore_index=True)
+        # Ya no agregamos la fila de "CAJA" porque esos dividendos están invertidos
+        # dentro del "Valor_Posicion_CLP" de tus otras acciones.
         
         df_grafico['Mercado'] = df_grafico['Ticker'].apply(
-            lambda x: 'Efectivo Disponible' if x == 'CAJA (Efectivo)' else ('Mercado Chileno' if str(x).endswith('.SN') else 'Mercado Internacional')
+            lambda x: 'Mercado Chileno' if str(x).endswith('.SN') else 'Mercado Internacional'
         )
         
         with col_torta1:
@@ -214,8 +220,6 @@ if archivo_excel:
             fig_accion.update_traces(textposition='inside', textinfo='percent+label', showlegend=False)
             fig_accion.update_layout(margin=dict(t=30, b=0, l=0, r=0))
             st.plotly_chart(fig_accion, use_container_width=True)
-
-        st.divider()
 
         # --- SECCIÓN 3: TABLA DETALLE ---
         st.subheader("Desglose Consolidado por Acción")
