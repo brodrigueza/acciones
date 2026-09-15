@@ -127,12 +127,13 @@ if archivo_excel:
 
         # --- SECCIÓN 1: MÉTRICAS GLOBALES (Resaltando la Ganancia) ---
         col1, col2, col3, col4 = st.columns(4)
-        costo_global = df_portafolio["Costo_Total_CLP"].sum()-df_portafolio["Dividendos_Cash_CLP"].sum()
+        costo_global = df_portafolio["Costo_Total_CLP"].sum()
         valor_invertido_global = df_portafolio["Valor_Posicion_CLP"].sum()
         caja_dividendos_nacionales = df_portafolio["Dividendos_Cash_CLP"].sum()
-        
-        patrimonio_total = valor_invertido_global + caja_dividendos_nacionales
-        ganancia_neta_global = patrimonio_total - costo_global
+
+        costo_global_div=costo_global-caja_dividendos_nacionales
+        patrimonio_total = valor_invertido_global
+        ganancia_neta_global = patrimonio_total - costo_global_div
         rentabilidad_porcentaje = (ganancia_neta_global/costo_global)*100
 
         col1.metric("Capital Aportado", f"${costo_global:,.0f}")
