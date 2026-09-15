@@ -134,11 +134,11 @@ if archivo_excel:
         costo_global_div=costo_global-caja_dividendos_nacionales
         patrimonio_total = valor_invertido_global
         ganancia_neta_global = patrimonio_total - costo_global_div
-        rentabilidad_porcentaje = (ganancia_neta_global/costo_global)*100
+        rentabilidad_porcentaje = (ganancia_neta_global/costo_global_div)*100
 
         col1.metric("Capital Aportado", f"${costo_global:,.0f}")
         col2.metric("Valor Mercado (Acciones)", f"${patrimonio_total:,.0f}")
-        col3.metric("Dividendos Generados hasta la fecha")", f"${caja_dividendos_nacionales:,.0f}")
+        col3.metric("Dividendos Generados hasta la fecha", f"${caja_dividendos_nacionales:,.0f}")
         # El delta (tercer argumento) colorea la ganancia automáticamente en verde o rojo
         col4.metric("Ganancia Neta Total", f"${ganancia_neta_global:,.0f}", f"{rentabilidad_porcentaje:.2f}%")
 
