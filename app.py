@@ -11,8 +11,22 @@ def obtener_tipo_cambio():
         usd_clp = yf.Ticker("CLP=X").history(period="1d")['Close'].iloc[-1]
         return float(usd_clp)
     except:
-        st.warning("No se pudo obtener tipo de cambio. Usando $900 por defecto.")
+        st.warning("No se pudo obtener tipo de cambio actual. Usando $900 por defecto.")
         return 900.0
+
+@st.cache_data(ttl=3600)
+def obtener_historial_usdclp():
+    """Descarga el historial completo del dólar para calcular el costo base exacto."""
+    try:
+        clp = yf.Ticker("CLP=X")
+        hist = clp.history(period="max")
+        if not hist.empty:
+            # Normalizamos la fecha (quitamos la hora) para cruzarla más fácil
+            hist.index = pd.to_datetime(hist.index, utc=True).normalize()
+            return hist['Close'].sort_index()
+        return pd.Series(dtype=float)
+    except:
+        return pd.Series(dtype=float)
 
 @st.cache_data(ttl=3600)
 def obtener_datos_mercado(tickers):
@@ -66,7 +80,9 @@ def simular_posicion_drip(row, dividendos_dict, precios_hist_dict):
         for fecha_div, monto_div in divs_validos.items():
             precio_fecha = serie_precios.asof(fecha_div) 
             if pd.notna(precio_fecha) and precio_fecha > 0:
-                cash_recibido = acciones_actuales * monto_div
+                # CORRECCIÓN: 15% de impuesto para Chile (retienes el 85% del dividendo)
+                impuesto_usa = 0.85 
+                cash_recibido = acciones_actuales * (monto_div * impuesto_usa)
                 nuevas_acciones = cash_recibido / precio_fecha
                 acciones_actuales += nuevas_acciones
                 
@@ -75,8 +91,8 @@ def simular_posicion_drip(row, dividendos_dict, precios_hist_dict):
 # --- INTERFAZ DEL DASHBOARD ---
 
 st.title("📊 Portafolio Consolidado (DRIP & Multimoneda)")
-st.markdown("Las acciones internacionales reinvierten dividendos automáticamente. Las nacionales generan liquidez (Caja).")
-st.link_button("Descargar Template)", "https://github.com/brodrigueza/acciones/raw/refs/heads/main/portafolio%20Template.xlsx")
+st.markdown("Las acciones internacionales reinvierten dividendos automáticamente (15% tax). Las nacionales generan liquidez (Caja).")
+st.link_button("Descargar Template", "https://github.com/brodrigueza/acciones/raw/refs/heads/main/portafolio%20Template.xlsx")
 
 archivo_excel = st.file_uploader("Cargar transacciones (Excel)", type=["xlsx", "xls"], accept_multiple_files=True)
 
@@ -96,22 +112,45 @@ if archivo_excel:
         tickers_unicos = tuple(df_transacciones["Ticker"].unique())
         
         tipo_cambio_actual = obtener_tipo_cambio()
-        st.info(f"Dólar actual: ${tipo_cambio_actual:,.2f} CLP | Calculando histórico de dividendos y reinversiones...")
+        serie_usd_clp = obtener_historial_usdclp()
+        
+        st.info(f"Dólar actual: ${tipo_cambio_actual:,.2f} CLP | Calculando histórico de dividendos, tipos de cambio y reinversiones...")
         
         precios_dict, dividendos_dict, precios_hist_dict = obtener_datos_mercado(tickers_unicos)
 
         df_transacciones["Precio_Actual"] = df_transacciones["Ticker"].map(precios_dict)
         df_transacciones = df_transacciones.dropna(subset=["Precio_Actual"]).copy()
         
-        df_transacciones["Factor_CLP"] = df_transacciones["Ticker"].apply(lambda x: 1 if str(x).endswith(".SN") else tipo_cambio_actual)
+        # Función auxiliar para buscar el dólar en la fecha de compra
+        def obtener_fx_historico(fecha, serie_fx, fx_actual):
+            if pd.isna(fecha) or serie_fx.empty:
+                return fx_actual
+            fecha_norm = fecha.normalize()
+            fx = serie_fx.asof(fecha_norm) # Busca el valor exacto o el día hábil anterior
+            return float(fx) if pd.notna(fx) else fx_actual
+
+        # Factor histórico para calcular lo que realmente pagaste (Costo)
+        df_transacciones["Factor_CLP_Historico"] = df_transacciones.apply(
+            lambda row: 1.0 if str(row["Ticker"]).endswith(".SN") else obtener_fx_historico(row["Fecha_Compra"], serie_usd_clp, tipo_cambio_actual),
+            axis=1
+        )
+        
+        # Factor actual para calcular cuánto vale tu portafolio hoy
+        df_transacciones["Factor_CLP_Actual"] = df_transacciones["Ticker"].apply(
+            lambda x: 1.0 if str(x).endswith(".SN") else tipo_cambio_actual
+        )
 
         res_drip = df_transacciones.apply(lambda row: simular_posicion_drip(row, dividendos_dict, precios_hist_dict), axis=1)
         df_transacciones["Cantidad_Final"] = res_drip["Cantidad_Final"]
         df_transacciones["Dividendos_Lote_Original"] = res_drip["Dividendos_Cash"]
 
-        df_transacciones["Costo_Lote_CLP"] = (df_transacciones["Cantidad"] * df_transacciones["Precio_Compra"]) * df_transacciones["Factor_CLP"]
-        df_transacciones["Valor_Actual_Lote_CLP"] = (df_transacciones["Cantidad_Final"] * df_transacciones["Precio_Actual"]) * df_transacciones["Factor_CLP"]
-        df_transacciones["Dividendos_Lote_CLP"] = df_transacciones["Dividendos_Lote_Original"] * df_transacciones["Factor_CLP"]
+        # Costo = Precio de compra * Dólar del día de la compra
+        df_transacciones["Costo_Lote_CLP"] = (df_transacciones["Cantidad"] * df_transacciones["Precio_Compra"]) * df_transacciones["Factor_CLP_Historico"]
+        
+        # Valor Actual = Cantidad de acciones con DRIP * Precio de hoy * Dólar de hoy
+        df_transacciones["Valor_Actual_Lote_CLP"] = (df_transacciones["Cantidad_Final"] * df_transacciones["Precio_Actual"]) * df_transacciones["Factor_CLP_Actual"]
+        
+        df_transacciones["Dividendos_Lote_CLP"] = df_transacciones["Dividendos_Lote_Original"] * df_transacciones["Factor_CLP_Actual"]
 
         df_portafolio = df_transacciones.groupby("Ticker").agg(
             Acciones_Iniciales=("Cantidad", "sum"),
@@ -131,20 +170,24 @@ if archivo_excel:
         valor_invertido_global = df_portafolio["Valor_Posicion_CLP"].sum()
         caja_dividendos_nacionales = df_portafolio["Dividendos_Cash_CLP"].sum()
 
-        costo_global_div=costo_global-caja_dividendos_nacionales
+        costo_global_div = costo_global - caja_dividendos_nacionales
         patrimonio_total = valor_invertido_global
-        ganancia_neta_global = patrimonio_total-costo_global_div
-        rentabilidad_porcentaje = (patrimonio_total/costo_global_div)*100
+        ganancia_neta_global = patrimonio_total - costo_global_div
+        
+        # CORRECCIÓN: Fórmula correcta de rentabilidad base
+        if costo_global_div > 0:
+            rentabilidad_porcentaje = (ganancia_neta_global / costo_global_div) * 100
+        else:
+            rentabilidad_porcentaje = 0.0
 
         col1.metric("Capital Aportado", f"${costo_global_div:,.0f}")
         col2.metric("Valor Mercado (Acciones)", f"${patrimonio_total:,.0f}")
-        col3.metric("Dividendos Generados hasta la fecha", f"${caja_dividendos_nacionales:,.0f}")
-        # El delta (tercer argumento) colorea la ganancia automáticamente en verde o rojo
+        col3.metric("Dividendos Generados (Caja)", f"${caja_dividendos_nacionales:,.0f}")
         col4.metric("Ganancia Neta Total", f"${ganancia_neta_global:,.0f}", f"{rentabilidad_porcentaje:.2f}%")
 
         st.divider()
 
-        # --- SECCIÓN 2: GRÁFICOS (Lado a lado, en la parte superior) ---
+        # --- SECCIÓN 2: GRÁFICOS ---
         st.subheader("Distribución Patrimonial")
         col_torta1, col_torta2 = st.columns(2)
         
@@ -174,7 +217,7 @@ if archivo_excel:
 
         st.divider()
 
-        # --- SECCIÓN 3: TABLA DETALLE (Abajo, ocupando todo el ancho) ---
+        # --- SECCIÓN 3: TABLA DETALLE ---
         st.subheader("Desglose Consolidado por Acción")
         st.dataframe(df_portafolio.style.format({
             "Acciones_Iniciales": "{:,.2f}",
