@@ -134,7 +134,7 @@ if archivo_excel:
         costo_global_div=costo_global-caja_dividendos_nacionales
         patrimonio_total = valor_invertido_global
         ganancia_neta_global = patrimonio_total-costo_global_div
-        rentabilidad_porcentaje = (patrimonio:total/costo_global_div)*100
+        rentabilidad_porcentaje = (patrimonio_total/costo_global_div)*100
 
         col1.metric("Capital Aportado", f"${costo_global_div:,.0f}")
         col2.metric("Valor Mercado (Acciones)", f"${patrimonio_total:,.0f}")
