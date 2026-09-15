@@ -127,7 +127,7 @@ if archivo_excel:
 
         # --- SECCIÓN 1: MÉTRICAS GLOBALES (Resaltando la Ganancia) ---
         col1, col2, col3, col4 = st.columns(4)
-        costo_global = df_portafolio["Costo_Total_CLP"].sum()
+        costo_global = df_portafolio["Costo_Total_CLP"].sum()-df_portafolio["Dividendos_Cash_CLP"].sum()
         valor_invertido_global = df_portafolio["Valor_Posicion_CLP"].sum()
         caja_dividendos_nacionales = df_portafolio["Dividendos_Cash_CLP"].sum()
         
@@ -137,7 +137,7 @@ if archivo_excel:
 
         col1.metric("Capital Aportado", f"${costo_global:,.0f}")
         col2.metric("Valor Mercado (Acciones)", f"${patrimonio_total:,.0f}")
-        col3.metric("Caja Líquida (Div. Nac.)", f"${caja_dividendos_nacionales:,.0f}")
+        col3.metric("Dividendos Generados hasta la fecha")", f"${caja_dividendos_nacionales:,.0f}")
         # El delta (tercer argumento) colorea la ganancia automáticamente en verde o rojo
         col4.metric("Ganancia Neta Total", f"${ganancia_neta_global:,.0f}", f"{rentabilidad_porcentaje:.2f}%")
 
