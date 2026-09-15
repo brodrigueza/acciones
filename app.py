@@ -30,7 +30,7 @@ def obtener_nombre(ticker):
 # 2. CARGA DE DATOS
 # ==========================================
 # (Aquí asumo que ya tienes tu código que lee tu Excel, CSV o base de datos)
-df_portafolio = pd.read_excel("mis_inversiones.xlsx") 
+df_portafolio = st.file_uploader("Cargar transacciones (Excel)", type=["xlsx", "xls"], accept_multiple_files=True)
 
 # ==========================================
 # 3. PROCESAMIENTO DE YFINANCE
